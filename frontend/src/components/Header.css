@@ -1,0 +1,164 @@
+
+/* Cabeçalho */
+
+.main-header {
+    animation: headerEntrance 0.6s ease both;
+    transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Logo */
+
+.header-brand {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+}
+
+.header-logo {
+    transition:
+        transform 0.35s ease,
+        box-shadow 0.35s ease,
+        background 0.35s ease;
+}
+
+.header-brand:hover .header-logo {
+    transform: rotate(-8deg) scale(1.08);
+    box-shadow: 0 0 20px #0d948855;
+}
+
+/* Usuário */
+
+.header-user {
+    animation: userEntrance 0.7s ease both;
+}
+
+.user-avatar,
+.user-avatar-placeholder {
+    transition:
+        transform 0.3s ease,
+        box-shadow 0.3s ease;
+}
+
+.header-user:hover .user-avatar,
+.header-user:hover .user-avatar-placeholder {
+    transform: scale(1.07);
+    box-shadow: 0 0 0 4px #0d948833;
+}
+
+.user-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.user-info strong {
+    transition: color 0.25s ease;
+}
+
+.header-user:hover .user-info strong {
+    color: #5eead4;
+}
+
+/* Botão sair */
+
+.logout-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    transition:
+        transform 0.25s ease,
+        background 0.25s ease,
+        border-color 0.25s ease,
+        box-shadow 0.25s ease;
+}
+
+.logout-button::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        110deg,
+        transparent 20%,
+        #ffffff20 50%,
+        transparent 80%
+    );
+    transform: translateX(-120%);
+    transition: transform 0.55s ease;
+}
+
+.logout-button:hover::before {
+    transform: translateX(120%);
+}
+
+.logout-button:hover {
+    background: #991b1b !important;
+    border-color: #ef4444 !important;
+    color: #ffffff !important;
+    transform: translateY(-3px);
+    box-shadow: 0 7px 20px #ef444433;
+}
+
+.logout-button:active {
+    transform: scale(0.94);
+    box-shadow: none;
+}
+
+.logout-button span {
+    position: relative;
+    z-index: 1;
+}
+
+.logout-icon {
+    display: inline-block;
+    font-size: 16px;
+    transition: transform 0.25s ease;
+}
+
+.logout-button:hover .logout-icon {
+    transform: translate(3px, -3px);
+}
+
+/* Animações de entrada */
+
+@keyframes headerEntrance {
+    from {
+        opacity: 0;
+        transform: translateY(-12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes userEntrance {
+    from {
+        opacity: 0;
+        transform: translateX(15px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Acessibilidade */
+
+@media (prefers-reduced-motion: reduce) {
+    .main-header,
+    .header-user {
+        animation: none;
+    }
+
+    .main-header *,
+    .main-header *::before,
+    .main-header *::after {
+        transition: none !important;
+    }
+}
