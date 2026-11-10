@@ -5,18 +5,40 @@ namespace App\Controllers\Api;
 use App\Controllers\BaseController;
 use App\Models\UsuarioModel;
 use App\Models\TokenRevogadoModel;
+use App\Services\LogService;
+use CodeIgniter\HTTP\RequestInterface;
+use CodeIgniter\HTTP\ResponseInterface;
+use Psr\Log\LoggerInterface;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use Throwable;
 
 class AuthController extends BaseController
 {
+    private UsuarioModel $usuarios;
+    private TokenRevogadoModel $tokens;
+    private LogService $log;
+
+    public function initController(
+        RequestInterface $request,
+        ResponseInterface $response,
+        LoggerInterface $logger
+    ) {
+        parent::initController($request, $response, $logger);
+
+        $this->usuarios = new UsuarioModel();
+        $this->tokens = new TokenRevogadoModel();
+        $this->log = new LogService();
+    }
+
     private function segredo()
     {
         $segredo = env('JWT_SECRET');
 
         if (!$segredo || strlen($segredo) < 32) {
-            throw new \RuntimeException('JWT_SECRET não configurado corretamente.');
+            throw new \RuntimeException(
+                'JWT_SECRET não configurado corretamente.'
+            );
         }
 
         return $segredo;
@@ -47,57 +69,18 @@ class AuthController extends BaseController
     {
         $dados = $this->request->getJSON(true) ?? [];
 
-        $nome = trim($dados['nome'] ?? '');
-        $email = trim($dados['email'] ?? '');
-        $senha = $dados['senha'] ?? '';
+        $validacao = $this->usuarios->validarCadastro($dados);
 
-        if ($nome === '' || $email === '' || $senha === '') {
+        if (!$validacao['valido']) {
             return $this->response
-                ->setStatusCode(400)
+                ->setStatusCode($validacao['status'])
                 ->setJSON([
                     'status' => false,
-                    'mensagem' => 'Preencha todos os campos.'
+                    'mensagem' => $validacao['mensagem']
                 ]);
         }
 
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            return $this->response
-                ->setStatusCode(400)
-                ->setJSON([
-                    'status' => false,
-                    'mensagem' => 'Informe um e-mail válido.'
-                ]);
-        }
-
-        if (strlen($senha) < 6) {
-            return $this->response
-                ->setStatusCode(400)
-                ->setJSON([
-                    'status' => false,
-                    'mensagem' => 'A senha precisa ter pelo menos 6 caracteres.'
-                ]);
-        }
-
-        $usuarios = new UsuarioModel();
-
-        $existente = $usuarios
-            ->where('email', $email)
-            ->first();
-
-        if ($existente) {
-            return $this->response
-                ->setStatusCode(409)
-                ->setJSON([
-                    'status' => false,
-                    'mensagem' => 'Este e-mail já está cadastrado.'
-                ]);
-        }
-
-        $id = $usuarios->insert([
-            'nome' => $nome,
-            'email' => $email,
-            'senha' => password_hash($senha, PASSWORD_DEFAULT)
-        ], true);
+        $id = $this->usuarios->cadastrarUsuario($validacao['dados']);
 
         if (!$id) {
             return $this->response
@@ -108,7 +91,11 @@ class AuthController extends BaseController
                 ]);
         }
 
-        $usuario = $usuarios->find($id);
+        $usuario = $this->usuarios->find($id);
+
+        $this->log->registrar('info', 'Usuário cadastrado com sucesso.', [
+            'usuario_id' => $id
+        ]);
 
         return $this->response
             ->setStatusCode(201)
@@ -135,13 +122,13 @@ class AuthController extends BaseController
                 ]);
         }
 
-        $usuarios = new UsuarioModel();
+        $usuario = $this->usuarios->autenticar($email, $senha);
 
-        $usuario = $usuarios
-            ->where('email', $email)
-            ->first();
+        if (!$usuario) {
+            $this->log->registrar('warning', 'Tentativa de login inválida.', [
+                'email' => $email
+            ]);
 
-        if (!$usuario || !password_verify($senha, $usuario['senha'])) {
             return $this->response
                 ->setStatusCode(401)
                 ->setJSON([
@@ -168,6 +155,10 @@ class AuthController extends BaseController
             $this->segredo(),
             'HS256'
         );
+
+        $this->log->registrar('info', 'Login realizado com sucesso.', [
+            'usuario_id' => $usuario['id']
+        ]);
 
         return $this->response->setJSON([
             'status' => true,
@@ -196,8 +187,7 @@ class AuthController extends BaseController
                 new Key($this->segredo(), 'HS256')
             );
 
-            $usuarios = new UsuarioModel();
-            $usuario = $usuarios->find((int) $dados->sub);
+            $usuario = $this->usuarios->find((int) $dados->sub);
 
             if (!$usuario) {
                 return $this->response
@@ -242,11 +232,19 @@ class AuthController extends BaseController
                 new Key($this->segredo(), 'HS256')
             );
 
-            $tokens = new TokenRevogadoModel();
+            $resultado = $this->tokens->revogarToken(
+                $dados->jti,
+                (int) $dados->exp
+            );
 
-            $tokens->insert([
-                'jti' => $dados->jti,
-                'expira_em' => date('Y-m-d H:i:s', (int) $dados->exp)
+            if (!$resultado) {
+                throw new \RuntimeException(
+                    'Não foi possível revogar o token.'
+                );
+            }
+
+            $this->log->registrar('info', 'Logout realizado com sucesso.', [
+                'usuario_id' => $dados->sub
             ]);
 
             return $this->response->setJSON([
@@ -255,6 +253,10 @@ class AuthController extends BaseController
             ]);
 
         } catch (Throwable $e) {
+            $this->log->registrar('error', 'Erro ao realizar logout.', [
+                'erro' => $e->getMessage()
+            ]);
+
             return $this->response
                 ->setStatusCode(401)
                 ->setJSON([

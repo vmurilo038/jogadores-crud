@@ -2,6 +2,7 @@
 
 namespace App\Filters;
 
+use App\Models\TokenRevogadoModel;
 use CodeIgniter\Filters\FilterInterface;
 use CodeIgniter\HTTP\RequestInterface;
 use CodeIgniter\HTTP\ResponseInterface;
@@ -56,13 +57,9 @@ class JwtFilter implements FilterInterface
                 throw new \Exception('Token inválido.');
             }
 
-            $db = \Config\Database::connect();
+            $tokens = new TokenRevogadoModel();
 
-            $revogado = $db->table('tokens_revogados')
-                ->where('jti', $dados->jti)
-                ->countAllResults();
-
-            if ($revogado > 0) {
+            if ($tokens->tokenFoiRevogado($dados->jti)) {
                 throw new \Exception('Token revogado.');
             }
 

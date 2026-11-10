@@ -19,6 +19,11 @@ export function AuthProvider({ children }) {
 
             try {
                 const resposta = await apiRequest('/api/auth/me');
+
+                if (!resposta || !resposta.usuario) {
+                    throw new Error('Sessão inválida.');
+                }
+
                 setUsuario(resposta.usuario);
             } catch (erro) {
                 localStorage.removeItem('jogadores_token');
@@ -39,10 +44,23 @@ export function AuthProvider({ children }) {
     }
 
     async function login(email, senha) {
+        // Não permite reaproveitar uma sessão anterior durante uma nova tentativa.
+        localStorage.removeItem('jogadores_token');
+        setUsuario(null);
+
         const resposta = await apiRequest('/api/auth/login', {
             method: 'POST',
             body: JSON.stringify({ email, senha })
         });
+
+        // Só autentica se a API devolver um token e um usuário válidos.
+        if (
+            !resposta ||
+            !resposta.token ||
+            !resposta.usuario
+        ) {
+            throw new Error('Resposta de autenticação inválida.');
+        }
 
         localStorage.setItem('jogadores_token', resposta.token);
         setUsuario(resposta.usuario);

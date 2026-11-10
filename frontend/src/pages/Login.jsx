@@ -51,6 +51,8 @@ function Login() {
 
     return (
         <main className="login-page">
+            <div className="login-background-glow"></div>
+
             <section className="login-card">
                 <div className="login-logo">
                     <div className="logo-icon">J</div>
@@ -105,7 +107,7 @@ function Login() {
 
                 <form onSubmit={handleSubmit}>
                     {modo === 'cadastro' && (
-                        <div className="login-field">
+                        <div className="login-field login-field-animation">
                             <label>Nome completo</label>
                             <input
                                 type="text"

@@ -4,10 +4,27 @@ namespace App\Controllers\Api;
 
 use App\Controllers\BaseController;
 use App\Models\JogadorModel;
+use App\Services\LogService;
+use CodeIgniter\HTTP\RequestInterface;
 use CodeIgniter\HTTP\ResponseInterface;
+use Psr\Log\LoggerInterface;
 
 class JogadoresController extends BaseController
 {
+    private JogadorModel $jogadores;
+    private LogService $log;
+
+    public function initController(
+        RequestInterface $request,
+        ResponseInterface $response,
+        LoggerInterface $logger
+    ) {
+        parent::initController($request, $response, $logger);
+
+        $this->jogadores = new JogadorModel();
+        $this->log = new LogService();
+    }
+
     private function resposta($mensagem, $status = 200, $dados = [])
     {
         return $this->response
@@ -31,11 +48,15 @@ class JogadoresController extends BaseController
         ];
 
         if (!in_array($arquivo->getMimeType(), $tiposPermitidos, true)) {
-            throw new \RuntimeException('Envie uma imagem JPG, PNG ou WEBP.');
+            throw new \RuntimeException(
+                'Envie uma imagem JPG, PNG ou WEBP.'
+            );
         }
 
         if ($arquivo->getSizeByUnit('mb') > 5) {
-            throw new \RuntimeException('A imagem deve ter no máximo 5 MB.');
+            throw new \RuntimeException(
+                'A imagem deve ter no máximo 5 MB.'
+            );
         }
 
         $diretorio = FCPATH . 'uploads/jogadores';
@@ -65,19 +86,18 @@ class JogadoresController extends BaseController
 
     public function index()
     {
-        $jogadores = new JogadorModel();
-
         return $this->resposta(
             'Jogadores encontrados.',
             200,
-            ['jogadores' => $jogadores->orderBy('nome', 'ASC')->findAll()]
+            [
+                'jogadores' => $this->jogadores->listarJogadores()
+            ]
         );
     }
 
     public function show($id = null)
     {
-        $jogadores = new JogadorModel();
-        $jogador = $jogadores->find($id);
+        $jogador = $this->jogadores->buscarJogador((int) $id);
 
         if (!$jogador) {
             return $this->resposta('Jogador não encontrado.', 404);
@@ -92,92 +112,82 @@ class JogadoresController extends BaseController
 
     public function criar()
     {
-        $nome = trim((string) $this->request->getPost('nome'));
-        $idade = $this->request->getPost('idade');
-        $posicao = trim((string) $this->request->getPost('posicao'));
-        $numeroCamisa = $this->request->getPost('numero_camisa');
+        $validacao = $this->jogadores->validarDados([
+            'nome' => $this->request->getPost('nome'),
+            'idade' => $this->request->getPost('idade'),
+            'posicao' => $this->request->getPost('posicao'),
+            'numero_camisa' => $this->request->getPost('numero_camisa')
+        ]);
 
-        if ($nome === '' || $idade === null || $posicao === '') {
-            return $this->resposta(
-                'Preencha nome, idade e posição.',
-                400
-            );
+        if (!$validacao['valido']) {
+            return $this->resposta($validacao['mensagem'], 400);
         }
 
-        if (!is_numeric($idade) || (int) $idade < 1 || (int) $idade > 100) {
-            return $this->resposta('Informe uma idade válida.', 400);
-        }
-
-        if ($numeroCamisa !== null && $numeroCamisa !== '' &&
-            (!is_numeric($numeroCamisa) || (int) $numeroCamisa < 1 || (int) $numeroCamisa > 99)) {
-            return $this->resposta('Informe um número de camisa entre 1 e 99.', 400);
-        }
+        $imagem = null;
 
         try {
-            $imagem = $this->salvarImagem($this->request->getFile('imagem'));
+            $imagem = $this->salvarImagem(
+                $this->request->getFile('imagem')
+            );
 
-            $jogadores = new JogadorModel();
+            $dados = $validacao['dados'];
+            $dados['imagem'] = $imagem;
 
-            $id = $jogadores->insert([
-                'nome' => $nome,
-                'idade' => (int) $idade,
-                'posicao' => $posicao,
-                'numero_camisa' => $numeroCamisa !== '' ? $numeroCamisa : null,
-                'imagem' => $imagem
-            ], true);
+            $id = $this->jogadores->cadastrarJogador($dados);
 
             if (!$id) {
                 $this->removerImagem($imagem);
-                return $this->resposta('Não foi possível cadastrar o jogador.', 500);
+
+                return $this->resposta(
+                    'Não foi possível cadastrar o jogador.',
+                    500
+                );
             }
+
+            $this->log->registrar('info', 'Jogador cadastrado com sucesso.', [
+                'jogador_id' => $id
+            ]);
 
             return $this->resposta(
                 'Jogador cadastrado com sucesso.',
                 201,
-                ['jogador' => $jogadores->find($id)]
+                ['jogador' => $this->jogadores->buscarJogador((int) $id)]
             );
+
         } catch (\Throwable $e) {
+            $this->log->registrar('error', 'Erro ao cadastrar jogador.', [
+                'erro' => $e->getMessage()
+            ]);
+
+            $this->removerImagem($imagem);
+
             return $this->resposta($e->getMessage(), 400);
         }
     }
 
     public function atualizar($id = null)
     {
-        $jogadores = new JogadorModel();
-        $jogador = $jogadores->find($id);
+        $jogador = $this->jogadores->buscarJogador((int) $id);
 
         if (!$jogador) {
             return $this->resposta('Jogador não encontrado.', 404);
         }
 
-        $nome = trim((string) $this->request->getPost('nome'));
-        $idade = $this->request->getPost('idade');
-        $posicao = trim((string) $this->request->getPost('posicao'));
-        $numeroCamisa = $this->request->getPost('numero_camisa');
+        $validacao = $this->jogadores->validarDados([
+            'nome' => $this->request->getPost('nome'),
+            'idade' => $this->request->getPost('idade'),
+            'posicao' => $this->request->getPost('posicao'),
+            'numero_camisa' => $this->request->getPost('numero_camisa')
+        ]);
 
-        if ($nome === '' || $idade === null || $posicao === '') {
-            return $this->resposta(
-                'Preencha nome, idade e posição.',
-                400
-            );
+        if (!$validacao['valido']) {
+            return $this->resposta($validacao['mensagem'], 400);
         }
 
-        if (!is_numeric($idade) || (int) $idade < 1 || (int) $idade > 100) {
-            return $this->resposta('Informe uma idade válida.', 400);
-        }
-
-        if ($numeroCamisa !== null && $numeroCamisa !== '' &&
-            (!is_numeric($numeroCamisa) || (int) $numeroCamisa < 1 || (int) $numeroCamisa > 99)) {
-            return $this->resposta('Informe um número de camisa entre 1 e 99.', 400);
-        }
+        $novaImagem = null;
 
         try {
-            $dados = [
-                'nome' => $nome,
-                'idade' => (int) $idade,
-                'posicao' => $posicao,
-                'numero_camisa' => $numeroCamisa !== '' ? $numeroCamisa : null
-            ];
+            $dados = $validacao['dados'];
 
             $arquivo = $this->request->getFile('imagem');
 
@@ -186,33 +196,68 @@ class JogadoresController extends BaseController
                 $dados['imagem'] = $novaImagem;
             }
 
-            $jogadores->update($id, $dados);
+            $resultado = $this->jogadores->atualizarJogador(
+                (int) $id,
+                $dados
+            );
 
-            if (isset($novaImagem)) {
+            if (!$resultado) {
+                $this->removerImagem($novaImagem);
+
+                return $this->resposta(
+                    'Não foi possível atualizar o jogador.',
+                    500
+                );
+            }
+
+            if ($novaImagem) {
                 $this->removerImagem($jogador['imagem']);
             }
+
+            $this->log->registrar('info', 'Jogador atualizado com sucesso.', [
+                'jogador_id' => $id
+            ]);
 
             return $this->resposta(
                 'Jogador atualizado com sucesso.',
                 200,
-                ['jogador' => $jogadores->find($id)]
+                ['jogador' => $this->jogadores->buscarJogador((int) $id)]
             );
+
         } catch (\Throwable $e) {
+            $this->log->registrar('error', 'Erro ao atualizar jogador.', [
+                'jogador_id' => $id,
+                'erro' => $e->getMessage()
+            ]);
+
+            $this->removerImagem($novaImagem);
+
             return $this->resposta($e->getMessage(), 400);
         }
     }
 
     public function excluir($id = null)
     {
-        $jogadores = new JogadorModel();
-        $jogador = $jogadores->find($id);
+        $jogador = $this->jogadores->buscarJogador((int) $id);
 
         if (!$jogador) {
             return $this->resposta('Jogador não encontrado.', 404);
         }
 
-        $jogadores->delete($id);
+        $resultado = $this->jogadores->excluirJogador((int) $id);
+
+        if (!$resultado) {
+            return $this->resposta(
+                'Não foi possível excluir o jogador.',
+                500
+            );
+        }
+
         $this->removerImagem($jogador['imagem']);
+
+        $this->log->registrar('info', 'Jogador excluído com sucesso.', [
+            'jogador_id' => $id
+        ]);
 
         return $this->resposta('Jogador excluído com sucesso.');
     }

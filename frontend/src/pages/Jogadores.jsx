@@ -28,29 +28,29 @@ function Jogadores() {
         imagem: null
     });
 
-    async function carregarJogadores() {
-        setCarregando(true);
+    async function carregarJogadores(mostrarCarregamento = true) {
+        if (mostrarCarregamento) {
+            setCarregando(true);
+        }
+
         setErro('');
 
         try {
             const dados = await apiRequest('/api/jogadores');
 
-            console.log('RESPOSTA DA API:', dados);
-            console.log('LISTA DE JOGADORES:', dados.jogadores);
+            if (!Array.isArray(dados.jogadores)) {
+                throw new Error('A API não retornou uma lista válida de jogadores.');
+            }
 
-            const lista = Array.isArray(dados.jogadores)
-                ? dados.jogadores
-                : [];
-
-            console.log('TOTAL DE JOGADORES:', lista.length);
-
-            setJogadores(lista);
+            setJogadores(dados.jogadores);
 
         } catch (error) {
             console.error('ERRO AO CARREGAR JOGADORES:', error);
             setErro(error.message);
         } finally {
-            setCarregando(false);
+            if (mostrarCarregamento) {
+                setCarregando(false);
+            }
         }
     }
 
@@ -252,6 +252,7 @@ function Jogadores() {
                 );
 
                 setMensagem('Jogador atualizado com sucesso!');
+
             } else {
                 await apiRequest('/api/jogadores/criar', {
                     method: 'POST',
@@ -260,6 +261,8 @@ function Jogadores() {
 
                 setMensagem('Jogador cadastrado com sucesso!');
             }
+
+            await carregarJogadores(false);
 
             setModalAberto(false);
             setJogadorEditando(null);
@@ -273,9 +276,8 @@ function Jogadores() {
                 imagem: null
             });
 
-            await carregarJogadores();
-
         } catch (error) {
+            console.error('ERRO AO SALVAR JOGADOR:', error);
             setErro(error.message);
         } finally {
             setSalvando(false);
@@ -292,7 +294,8 @@ function Jogadores() {
 
             setJogadores((anteriores) =>
                 anteriores.filter(
-                    (jogador) => jogador.id !== jogadorExcluindo.id
+                    (jogador) =>
+                        String(jogador.id) !== String(jogadorExcluindo.id)
                 )
             );
 
