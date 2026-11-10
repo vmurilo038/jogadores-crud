@@ -16,4 +16,17 @@ class TokenRevogadoModel extends Model
         'jti',
         'expira_em'
     ];
+
+    public function tokenFoiRevogado(string $jti): bool
+    {
+        return $this->where('jti', $jti)->countAllResults() > 0;
+    }
+
+    public function revogarToken(string $jti, int $expiracao): bool
+    {
+        return $this->insert([
+            'jti' => $jti,
+            'expira_em' => date('Y-m-d H:i:s', $expiracao)
+        ]) !== false;
+    }
 }

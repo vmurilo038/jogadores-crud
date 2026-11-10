@@ -14,6 +14,8 @@ class Cors extends BaseConfig
 
         'allowedOriginsPatterns' => [],
 
+        // Não utilizamos autenticação por cookies.
+        // O sistema utiliza JWT pelo cabeçalho Authorization.
         'supportsCredentials' => false,
 
         'allowedHeaders' => [
@@ -23,7 +25,10 @@ class Cors extends BaseConfig
             'Accept'
         ],
 
-        'exposedHeaders' => [],
+        // Permite ao React acessar o cabeçalho do Rate Limit.
+        'exposedHeaders' => [
+            'Retry-After'
+        ],
 
         'allowedMethods' => [
             'GET',
@@ -34,6 +39,6 @@ class Cors extends BaseConfig
             'OPTIONS'
         ],
 
-        'maxAge' => 7200
+        'maxAge' => 3600
     ];
 }

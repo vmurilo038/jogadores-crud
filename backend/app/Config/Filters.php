@@ -3,6 +3,7 @@
 namespace Config;
 
 use App\Filters\JwtFilter;
+use App\Filters\RateLimitFilter;
 use CodeIgniter\Config\Filters as BaseFilters;
 use CodeIgniter\Filters\Cors;
 use CodeIgniter\Filters\CSRF;
@@ -27,6 +28,7 @@ class Filters extends BaseFilters
         'pagecache'     => PageCache::class,
         'performance'   => PerformanceMetrics::class,
         'jwt'           => JwtFilter::class,
+        'ratelimit'     => RateLimitFilter::class,
     ];
 
     public array $required = [
