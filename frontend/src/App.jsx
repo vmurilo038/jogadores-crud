@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Jogadores from './pages/Jogadores';
+import Logs from './pages/Logs';
 
 function RotaProtegida({ children }) {
     const { usuario, carregando } = useAuth();
@@ -41,6 +42,15 @@ function App() {
                 element={
                     <RotaProtegida>
                         <Jogadores />
+                    </RotaProtegida>
+                }
+            />
+
+            <Route
+                path="/logs"
+                element={
+                    <RotaProtegida>
+                        <Logs />
                     </RotaProtegida>
                 }
             />

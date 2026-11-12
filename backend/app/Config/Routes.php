@@ -75,5 +75,12 @@ $routes->group('api', ['filter' => 'cors'], static function ($routes) {
             'jogadores/(:num)',
             'Api\JogadoresController::excluir/$1'
         );
+
+        // Logs
+
+        $routes->get(
+            'logs',
+            'Api\LogsController::index'
+        );
     });
 });

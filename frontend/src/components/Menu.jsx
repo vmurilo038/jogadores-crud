@@ -9,6 +9,11 @@ function Menu() {
                 <span>⚽</span>
                 Jogadores
             </NavLink>
+
+            <NavLink to="/logs" className="menu-link">
+                <span>📋</span>
+                Logs
+            </NavLink>
         </aside>
     );
 }

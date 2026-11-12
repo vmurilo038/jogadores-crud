@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import './Login.css';
@@ -16,9 +16,35 @@ function Login() {
     const [mensagem, setMensagem] = useState('');
     const [erro, setErro] = useState('');
     const [carregando, setCarregando] = useState(false);
+    const [bloqueioSegundos, setBloqueioSegundos] = useState(0);
+
+    useEffect(() => {
+        if (bloqueioSegundos <= 0) {
+            return;
+        }
+
+        const intervalo = setInterval(() => {
+            setBloqueioSegundos((tempoAtual) =>
+                Math.max(tempoAtual - 1, 0)
+            );
+        }, 1000);
+
+        return () => clearInterval(intervalo);
+    }, [bloqueioSegundos]);
+
+    function formatarTempo(segundos) {
+        const minutos = Math.floor(segundos / 60);
+        const segundosRestantes = segundos % 60;
+
+        return `${String(minutos).padStart(2, '0')}:${String(segundosRestantes).padStart(2, '0')}`;
+    }
 
     async function handleSubmit(event) {
         event.preventDefault();
+
+        if (modo === 'login' && bloqueioSegundos > 0) {
+            return;
+        }
 
         setErro('');
         setMensagem('');
@@ -37,7 +63,20 @@ function Login() {
                 navigate('/inicio');
             }
         } catch (error) {
-            setErro(error.message || 'Não foi possível realizar a operação.');
+            if (error.status === 429) {
+                setErro('');
+
+                const tempo = Math.max(
+                    1,
+                    Number(error.retryAfter) || 60
+                );
+
+                setBloqueioSegundos(tempo);
+            } else {
+                setErro(
+                    error.message || 'Não foi possível realizar a operação.'
+                );
+            }
         } finally {
             setCarregando(false);
         }
@@ -105,10 +144,29 @@ function Login() {
                     </div>
                 )}
 
+                {modo === 'login' && bloqueioSegundos > 0 && (
+                    <div className="login-message error login-lock-message">
+                        <strong>Acesso temporariamente bloqueado</strong>
+
+                        <p>
+                            Muitas tentativas de login. Aguarde para tentar novamente.
+                        </p>
+
+                        <div className="login-countdown">
+                            {formatarTempo(bloqueioSegundos)}
+                        </div>
+
+                        <small>
+                            Você poderá tentar novamente quando o contador chegar a zero.
+                        </small>
+                    </div>
+                )}
+
                 <form onSubmit={handleSubmit}>
                     {modo === 'cadastro' && (
                         <div className="login-field login-field-animation">
                             <label>Nome completo</label>
+
                             <input
                                 type="text"
                                 placeholder="Digite seu nome"
@@ -121,6 +179,7 @@ function Login() {
 
                     <div className="login-field">
                         <label>E-mail</label>
+
                         <input
                             type="email"
                             placeholder="seuemail@exemplo.com"
@@ -155,13 +214,18 @@ function Login() {
                     <button
                         className="login-submit"
                         type="submit"
-                        disabled={carregando}
+                        disabled={
+                            carregando ||
+                            (modo === 'login' && bloqueioSegundos > 0)
+                        }
                     >
                         {carregando
                             ? 'Aguarde...'
-                            : modo === 'login'
-                                ? 'Entrar na plataforma'
-                                : 'Criar minha conta'}
+                            : modo === 'login' && bloqueioSegundos > 0
+                                ? `Aguarde ${formatarTempo(bloqueioSegundos)}`
+                                : modo === 'login'
+                                    ? 'Entrar na plataforma'
+                                    : 'Criar minha conta'}
                     </button>
                 </form>
 
