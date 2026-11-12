@@ -35,33 +35,82 @@ class RateLimitFilter implements FilterInterface
 
         $ip = $request->getIPAddress();
 
-        $chave = hash(
-            'sha256',
-            $grupo . '|' . $ip
-        );
+        $identificador = hash('sha256', $grupo . '|' . $ip);
 
-        $throttler = service('throttler');
+        $chaveTentativas = 'rate_limit_tentativas_' . $identificador;
+        $chaveBloqueio = 'rate_limit_bloqueio_' . $identificador;
 
-        $permitido = $throttler->check(
-            $chave,
-            $limite,
-            $segundos
-        );
+        $cache = cache();
 
-        if (!$permitido) {
-            $tempoEspera = $throttler->getTokenTime();
+        $agora = time();
+
+        // Verifica se já existe um bloqueio ativo.
+        $bloqueioAte = $cache->get($chaveBloqueio);
+
+        if ($bloqueioAte !== null) {
+            $tempoEspera = (int) $bloqueioAte - $agora;
+
+            if ($tempoEspera > 0) {
+                return $response
+                    ->setStatusCode(429)
+                    ->setHeader('Retry-After', (string) $tempoEspera)
+                    ->setJSON([
+                        'status' => false,
+                        'mensagem' => 'Limite de requisições excedido. Tente novamente mais tarde.',
+                        'limite' => $limite,
+                        'intervalo_segundos' => $segundos,
+                        'tente_novamente_em' => $tempoEspera
+                    ]);
+            }
+
+            $cache->delete($chaveBloqueio);
+            $cache->delete($chaveTentativas);
+        }
+
+        // Recupera a quantidade de tentativas.
+        $tentativas = $cache->get($chaveTentativas);
+
+        if ($tentativas === null) {
+            $tentativas = 1;
+
+            $cache->save(
+                $chaveTentativas,
+                $tentativas,
+                $segundos
+            );
+
+            return;
+        }
+
+        $tentativas++;
+
+        // Se ultrapassou o limite, inicia um bloqueio de 60 segundos.
+        if ($tentativas > $limite) {
+            $bloqueioAte = $agora + $segundos;
+
+            $cache->save(
+                $chaveBloqueio,
+                $bloqueioAte,
+                $segundos + 1
+            );
 
             return $response
                 ->setStatusCode(429)
-                ->setHeader('Retry-After', (string) $tempoEspera)
+                ->setHeader('Retry-After', (string) $segundos)
                 ->setJSON([
                     'status' => false,
                     'mensagem' => 'Limite de requisições excedido. Tente novamente mais tarde.',
                     'limite' => $limite,
                     'intervalo_segundos' => $segundos,
-                    'tente_novamente_em' => $tempoEspera
+                    'tente_novamente_em' => $segundos
                 ]);
         }
+
+        $cache->save(
+            $chaveTentativas,
+            $tentativas,
+            $segundos
+        );
     }
 
     public function after(

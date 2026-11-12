@@ -1,3 +1,4 @@
+
 const API_URL = import.meta.env.VITE_API_URL;
 
 export async function apiRequest(endpoint, options = {}) {
@@ -20,10 +21,22 @@ export async function apiRequest(endpoint, options = {}) {
         headers
     });
 
-    const dados = await resposta.json();
+    const dados = await resposta.json().catch(() => ({}));
 
     if (!resposta.ok) {
-        throw new Error(dados.mensagem || 'Erro ao comunicar com o servidor.');
+        const erro = new Error(
+            dados.mensagem || 'Erro ao comunicar com o servidor.'
+        );
+
+        erro.status = resposta.status;
+
+        erro.retryAfter = Number(
+            dados.tente_novamente_em ||
+            resposta.headers.get('Retry-After') ||
+            0
+        );
+
+        throw erro;
     }
 
     return dados;
